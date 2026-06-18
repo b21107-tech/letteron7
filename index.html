@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>letterOn</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <style>
+        /* 글로벌 비주얼 가이드 [cite: 77, 78] */
+        :root {
+            --retro-red: #c93c3c;
+            --beige: #f4ebd0;
+            --wood-brown: #5c4033;
+            --light-wood: #8b6b5d;
+        }
+
+        body { font-family: 'Pretendard', 'Malgun Gothic', sans-serif; background-color: #e9ecef; margin: 0; padding: 0; display: flex; justify-content: center; }
+        #app-container { width: 100%; max-width: 480px; background: var(--beige); min-height: 100vh; box-shadow: 0 0 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; position: relative; overflow: hidden; color: var(--wood-brown); }
+        
+        /* 상단 헤더 규칙 [cite: 79] */
+        header { background-color: var(--beige); color: var(--retro-red); padding: 15px 20px; text-align: center; font-size: 28px; font-weight: 900; letter-spacing: 2px; border-bottom: 3px solid var(--wood-brown); position: sticky; top: 0; z-index: 10; font-family: 'Courier New', Courier, monospace; }
+        
+        .content { padding: 20px; flex-grow: 1; display: flex; flex-direction: column; position: relative; }
+        .hidden { display: none !important; }
+        
+        /* 뒤로가기 버튼  */
+        .back-btn { background: none; border: none; color: var(--wood-brown); font-size: 16px; font-weight: bold; cursor: pointer; text-align: left; padding: 0 0 15px 0; margin: 0; width: auto; box-shadow: none; display: flex; align-items: center; gap: 5px; }
+        .back-btn:hover { background: none; transform: none; color: var(--retro-red); }
+
+        /* 입력 폼 스타일 */
+        input, textarea, select { width: 100%; padding: 14px; margin: 10px 0; border: 2px solid var(--wood-brown); border-radius: 8px; box-sizing: border-box; font-size: 15px; background-color: #fffdf8; color: var(--wood-brown); }
+        .title-input { font-size: 20px; font-weight: bold; } /*  */
+        textarea { height: 200px; resize: none; font-family: inherit; line-height: 1.6; background-image: repeating-linear-gradient(transparent, transparent 29px, #e5e0d8 30px); background-attachment: local; padding-top: 35px; } /* 편지지 느낌 [cite: 104] */
+        
+        /* 뽀용한 버튼 스타일 [cite: 73, 99] */
+        button { width: 100%; padding: 16px; background-color: var(--wood-brown); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 12px; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 4px 0 var(--light-wood); display: flex; align-items: center; justify-content: center; gap: 10px; }
+        button:active { transform: translateY(4px); box-shadow: none; }
+        button.primary-btn { background-color: var(--retro-red); box-shadow: 0 4px 0 #9e2a2a; font-size: 18px; padding: 20px; }
+        button.primary-btn:active { box-shadow: none; }
+        button.secondary { background-color: #fffdf8; color: var(--wood-brown); border: 2px solid var(--wood-brown); box-shadow: 0 4px 0 var(--wood-brown); }
+        button.secondary:active { box-shadow: none; }
+
+        /* 메인 대시보드 상단 바 [cite: 95, 96, 97] */
+        .main-top-bar { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; background: #fffdf8; padding: 15px; border-radius: 12px; border: 2px solid var(--wood-brown); }
+        .main-top-left { display: flex; flex-direction: column; gap: 5px; }
+        .main-top-left button { width: auto; padding: 5px 10px; font-size: 12px; margin: 0; border-radius: 6px; box-shadow: 0 2px 0 var(--light-wood); }
+        .main-top-right { text-align: right; }
+        .user-nickname { font-size: 18px; font-weight: bold; color: var(--retro-red); margin-bottom: 5px; display: block;}
+        .ticket-badge { background: var(--wood-brown); color: white; padding: 5px 10px; border-radius: 20px; font-size: 14px; font-weight: bold; }
+
+        /* 우체국 감성 일러스트 대체 (이모지 및 레이아웃) [cite: 73] */
+        .illustration-area { text-align: center; font-size: 80px; margin: 20px 0; opacity: 0.9; }
+
+        /* 탭 및 카드 스타일 */
+        .tab-container { display: flex; margin-bottom: 15px; border-bottom: 3px solid var(--wood-brown); }
+        .tab { flex: 1; text-align: center; padding: 12px; cursor: pointer; font-weight: bold; color: var(--light-wood); border-radius: 10px 10px 0 0; }
+        .tab.active { color: white; background-color: var(--wood-brown); }
+        
+        .letter-card { background: #fffdf8; border: 2px solid var(--wood-brown); border-left: 6px solid var(--retro-red); padding: 15px; margin-bottom: 15px; border-radius: 8px; cursor: pointer; transition: 0.2s; box-shadow: 0 3px 0 var(--wood-brown); }
+        .letter-card:active { transform: translateY(3px); box-shadow: none; }
+        .letter-card.sent { border-left-color: var(--light-wood); }
+
+        /* 채팅 화면 [cite: 129, 130] */
+        #chat-screen { flex-grow: 1; display: flex; flex-direction: column; height: 100%; }
+        #chat-messages { background-color: rgba(255,255,255,0.5); flex-grow: 1; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 2px dashed var(--wood-brown); display: flex; flex-direction: column; max-height: 50vh; }
+        .letter-paper { background-color: #fffdf8; border: 1px solid #e0d8c3; padding: 15px; margin-bottom: 15px; border-radius: 4px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
+        .letter-paper.me { border-left: 4px solid var(--light-wood); align-self: flex-end; width: 85%; }
+        .letter-paper.other { border-left: 4px solid var(--retro-red); align-self: flex-start; width: 85%; }
+        .letter-header { font-size: 12px; color: var(--light-wood); border-bottom: 1px dashed var(--wood-brown); padding-bottom: 8px; margin-bottom: 12px; font-weight: bold; }
+        .letter-body { font-size: 15px; line-height: 1.6; word-break: break-word; white-space: pre-wrap; }
+
+        /* 애니메이션 연출 오버레이 [cite: 110-114] */
+        #animation-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--beige); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .envelope { width: 150px; height: 100px; background: #fffdf8; border: 3px solid var(--wood-brown); position: relative; margin-bottom: 50px; animation: fold 0.5s forwards, drop 1s 0.5s forwards; }
+        .envelope::before { content: ''; position: absolute; top: 0; left: 0; border-top: 50px solid var(--light-wood); border-left: 75px solid transparent; border-right: 75px solid transparent; }
+        .postbox { font-size: 100px; position: relative; z-index: 10; }
+        
+        @keyframes fold { 0% { transform: scale(1) translateY(0); opacity: 0; } 50% { opacity: 1; } 100% { transform: scale(0.8) translateY(20px); opacity: 1; } }
+        @keyframes drop { 0% { transform: scale(0.8) translateY(20px); } 100% { transform: scale(0.3) translateY(150px); opacity: 0; } }
+
+        /* 토스트 알림 [cite: 115] */
+        #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--retro-red); color: white; padding: 15px 25px; border-radius: 30px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.2); z-index: 1000; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        #toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <header>letterOn</header>
+    
+    <div class="content">
+        <div id="login-screen">
+            <div class="illustration-area">💌</div>
+            <h2 style="text-align: center; color: var(--retro-red);">당신의 마음을 부쳐주세요</h2>
+            <p style="text-align: center; font-size: 14px; margin-bottom: 40px; color: var(--light-wood);">
+                안전하고 따뜻한 이화여고 대나무숲<br>@ewha.hs.kr 학교 계정으로만 입장할 수 있어요.
+            </p>
+            <button class="primary-btn" onclick="loginWithEwha()">📮 구글 학교 계정으로 로그인</button>
+        </div>
+
+        <div id="profile-screen" class="hidden">
+            <div class="illustration-area">🤫</div>
+            <h3 style="text-align: center;">어떤 이름으로 활동할까요?</h3>
+            <p style="text-align: center; font-size: 14px; color: var(--light-wood);">
+                본인을 유추할 수 없는 <b>완벽한 익명 닉네임</b>을 지어주세요.<br>(누구인지 절대 알 수 없어요!)
+            </p>
+            <input type="text" id="nickname-input" placeholder="예: 구운고구마, 새벽감성 등 (중복불가)">
+            <button class="primary-btn" onclick="saveProfile()">이름표 달고 시작하기 ✨</button>
+        </div>
+
+        <div id="main-screen" class="hidden">
+            <div class="main-top-bar">
+                <div class="main-top-left">
+                    <button class="secondary" onclick="showChangeNickname()">✏️ 닉네임 변경</button>
+                    <button class="secondary" onclick="logout()">🔒 로그아웃</button>
+                </div>
+                <div class="main-top-right">
+                    <span id="user-nickname" class="user-nickname"></span>
+                    <span class="ticket-badge">열람권 갯수: <span id="ticket-count">0</span>개 🎟️</span>
+                </div>
+            </div>
+            
+            <div class="illustration-area" style="font-size: 60px; margin: 10px 0 30px 0;">📮🕊️✉️</div>
+
+            <button class="primary-btn" onclick="showComposeScreen()">✍️ 마음 띄워 보내기</button>
+            <button onclick="showPublicPoolScreen()">📬 우체통 열어보기</button>
+            <button class="secondary" onclick="showInboxScreen()" style="background: white;">📦 기억 보관함</button>
+            
+            <button id="btn-admin" onclick="showAdminScreen()" class="hidden" style="background-color: #333; margin-top: 20px;">🚨 관리자: 신고 접수함</button>
+        </div>
+
+        <div id="compose-screen" class="hidden">
+            <button class="back-btn" onclick="showMainScreen()">🔙 뒤로가기</button>
+            <h3 style="margin-top: 0;">누군가에게 마음 띄워 보내기</h3>
+            
+            <select id="category">
+                <option value="응원">응원/위로</option>
+                <option value="고민상담">고민 상담</option>
+                <option value="일상">일상 이야기</option>
+            </select>
+            
+            <input type="text" id="letter-title" class="title-input" placeholder="편지 제목을 적어주세요 (굵은 글씨)">
+            <textarea id="letter-content" placeholder="최소 150자 이상 정성껏 마음을 적어주세요. 누군가에게 큰 힘이 될 거예요."></textarea>
+            <div id="char-count" style="text-align: right; font-size: 13px; color: var(--retro-red); font-weight: bold; margin-bottom: 15px;">현재 0자 / 최소 150자</div>
+            
+            <button class="primary-btn" onclick="sendLetter()" style="justify-content: flex-start; padding-left: 20px;">
+                <span style="font-size: 24px;">📮</span> 편지 발송하기
+            </button>
+        </div>
+
+        <div id="animation-overlay" class="hidden">
+            <div class="envelope"></div>
+            <div class="postbox">📮</div>
+        </div>
+
+        <div id="public-pool-screen" class="hidden">
+            <button class="back-btn" onclick="showMainScreen()">🔙 뒤로가기</button>
+            <h3 style="margin-top: 0;">우체통 열어보기</h3>
+            <p style="font-size: 13px; color: var(--light-wood); margin-bottom: 20px;">익명의 발신자가 보낸 편지들입니다. 마음이 끌리는 편지를 열어보세요.</p>
+            <div id="public-letters-container"></div>
+        </div>
+
+        <div id="inbox-screen" class="hidden">
+            <button class="back-btn" onclick="showMainScreen()">🔙 뒤로가기</button>
+            <h3 style="margin-top: 0;">기억 보관함</h3>
+            <div class="tab-container">
+                <div id="tab-received" class="tab active" onclick="switchTab('received')">나에게 온 마음</div>
+                <div id="tab-sent" class="tab" onclick="switchTab('sent')">내가 보낸 마음</div>
+            </div>
+            <div id="letters-container"></div>
+        </div>
+
+        <div id="chat-screen" class="hidden">
+            <button class="back-btn" onclick="closeChat()">🔙 보관함으로 돌아가기</button>
+            <div class="main-top-bar" style="margin-bottom: 10px; padding: 10px;">
+                <strong id="chat-partner-name" style="color: var(--retro-red); font-size: 16px;"></strong>
+                <button onclick="reportUser()" style="background-color: #d32f2f; width: auto; padding: 6px 12px; font-size: 12px; margin: 0; box-shadow: none;">🚨 신고</button>
+            </div>
+            
+            <div id="chat-messages"></div>
+            
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+                <textarea id="chat-input" placeholder="이어서 답장을 적어보세요..." style="height: 100px; padding-top: 15px;"></textarea>
+                <button class="primary-btn" onclick="sendReply()">답장하기 ✍️</button>
+            </div>
+        </div>
+
+        <div id="admin-screen" class="hidden">
+            <button class="back-btn" onclick="showMainScreen()">🔙 뒤로가기</button>
+            <h3 style="color: #d32f2f; margin-top:0;">🚨 신고 접수함</h3>
+            <div id="admin-reports-container"></div>
+        </div>
+    </div>
+</div>
+
+<div id="toast">마음이 성공적으로 배달되었습니다! (열람권 +1)</div> <script>
+    // Firebase Config (그대로 유지)
+    const firebaseConfig = {
+        apiKey: "AIzaSyC5SvPWmuxJl72Ld7gobAYpBEHfBf3r4Ds",
+        authDomain: "letterewha.firebaseapp.com",
+        projectId: "letterewha",
+        storageBucket: "letterewha.firebasestorage.app",
+        messagingSenderId: "265761573288",
+        appId: "1:265761573288:web:ee95ffeac4250836ea359d",
+        measurementId: "G-PH8HGR8P20"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    let currentUser = null;
+    let currentUserNickname = null;
+    let currentTab = 'received'; 
+    let currentChatLetterId = null;
+    let currentChatPartnerEmail = null; // 내부 로직용으로만 존재, 화면엔 절대 노출 안함 [cite: 83]
+    let chatUnsubscribe = null;
+
+    const badWords = ["개새끼", "시발", "씨발", "창녀", "좆", "존나", "병신", "느금마", "니애미", "한남", "한녀"];
+
+    function hasBadWords(text) { return badWords.some(word => text.includes(word)); }
+
+    // 글자수 세기 [cite: 106]
+    document.getElementById('letter-content').addEventListener('input', function() {
+        document.getElementById('char-count').innerText = `현재 ${this.value.length}자 / 최소 150자`;
+    });
+
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        toast.innerText = msg;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    function loginWithEwha() {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        provider.setCustomParameters({ hd: "ewha.hs.kr" });
+        auth.signInWithPopup(provider).then((result) => {
+            const user = result.user;
+            if (!user.email.endsWith("@ewha.hs.kr")) {
+                alert("이화여고 학교 계정만 이용 가능합니다!");
+                auth.signOut();
+                return;
+            }
+            currentUser = user;
+            checkProfileAndProceed();
+        }).catch((error) => { alert("로그인 실패: " + error.message); });
+    }
+
+    async function checkProfileAndProceed() {
+        const userDoc = await db.collection("users").doc(currentUser.email).get();
+        if (!userDoc.exists) {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('profile-screen').classList.remove('hidden');
+        } else {
+            const userData = userDoc.data();
+            currentUserNickname = userData.nickname;
+            
+            if (userData.suspendedUntil && userData.suspendedUntil > Date.now()) {
+                const releaseDate = new Date(userData.suspendedUntil).toLocaleString();
+                alert(`신고 누적으로 계정이 정지되었습니다.\n해제 일시: ${releaseDate}`);
+                auth.signOut();
+                return;
+            }
+            showMainScreen();
+        }
+    }
+
+    async function saveProfile() {
+        const nickname = document.getElementById('nickname-input').value.trim();
+        if (!nickname) return alert("사용할 닉네임을 입력해주세요!");
+
+        try {
+            const nicknameSnapshot = await db.collection("users").where("nickname", "==", nickname).get();
+            // 본인이 닉네임을 변경하는 경우 중복 체크 패스
+            if (!nicknameSnapshot.empty && nicknameSnapshot.docs[0].id !== currentUser.email) {
+                return alert("이미 누군가가 사용 중인 닉네임입니다.");
+            }
+
+            await db.collection("users").doc(currentUser.email).set({
+                nickname: nickname,
+                tickets: firebase.firestore.FieldValue.increment(0) // 기존 티켓 유지 또는 0
+            }, { merge: true });
+            
+            currentUserNickname = nickname;
+            alert(`환영합니다, ${nickname}님!`);
+            showMainScreen();
+        } catch (e) { alert("프로필 저장 실패: " + e.message); }
+    }
+
+    function showChangeNickname() {
+        document.getElementById('main-screen').classList.add('hidden');
+        document.getElementById('profile-screen').classList.remove('hidden');
+        document.getElementById('nickname-input').value = currentUserNickname;
+    }
+
+    // 편지 발송 및 애니메이션 처리 [cite: 108-116]
+    async function sendLetter() {
+        const category = document.getElementById('category').value;
+        const title = document.getElementById('letter-title').value.trim();
+        const content = document.getElementById('letter-content').value.trim();
+
+        if(!title) return alert("편지 제목을 입력해주세요.");
+        if (content.length < 150) return alert(`편지는 최소 150자 이상 작성해야 합니다.\n(현재: ${content.length}자)`);
+        
+        let finalContent = content;
+        if (hasBadWords(content)) {
+            if(!confirm("전송이 불가합니다. 비속어나 욕설이 포함되어있습니다. 그래도 *표시로 치환하여 보내겠습니까?")) return;
+            badWords.forEach(word => { finalContent = finalContent.replaceAll(word, "***"); });
+        }
+
+        // 애니메이션 오버레이 띄우기 [cite: 110, 111]
+        document.getElementById('animation-overlay').classList.remove('hidden');
+
+        try {
+            const letterRef = await db.collection("letters").add({
+                from_email: currentUser.email,
+                from_nickname: currentUserNickname,
+                category: category,
+                title: title, // 제목 추가 
+                content: finalContent, 
+                status: "public",
+                read_by: null,
+                read_by_nickname: null,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            await letterRef.collection("messages").add({
+                sender_email: currentUser.email,
+                content: finalContent,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            await db.collection("users").doc(currentUser.email).update({
+                tickets: firebase.firestore.FieldValue.increment(1)
+            });
+
+            // 1.5초 대기 후 메인 화면으로 이동 및 토스트 띄우기 [cite: 114, 115, 116]
+            setTimeout(() => {
+                document.getElementById('animation-overlay').classList.add('hidden');
+                document.getElementById('letter-title').value = "";
+                document.getElementById('letter-content').value = "";
+                document.getElementById('char-count').innerText = `현재 0자 / 최소 150자`;
+                showToast("마음이 성공적으로 배달되었습니다! (열람권 +1)");
+                showMainScreen();
+            }, 1500);
+
+        } catch (error) { 
+            document.getElementById('animation-overlay').classList.add('hidden');
+            alert("발송 실패: " + error.message); 
+        }
+    }
+
+    function loadPublicPool() {
+        const container = document.getElementById('public-letters-container');
+        container.innerHTML = "<p style='text-align:center;'>우체통을 확인하는 중...</p>";
+
+        db.collection("letters").where("status", "==", "public").onSnapshot((snapshot) => {
+            container.innerHTML = "";
+            let letterCount = 0;
+
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                if (data.from_email !== currentUser.email) {
+                    letterCount++;
+                    // 익명 닉네임만 노출 [cite: 120]
+                    container.innerHTML += `
+                        <div class="letter-card" style="border-left-color: var(--wood-brown);" onclick="pickLetter('${doc.id}')">
+                            <div style="font-size:13px; color:var(--retro-red); font-weight:bold; margin-bottom:5px;">[${data.category}]</div>
+                            <div style="font-size:16px;">From. <strong>${data.from_nickname}</strong></div>
+                            <div style="font-size:12px; color:var(--light-wood); margin-top:10px;">클릭하여 열어보기 📬</div>
+                        </div>`;
+                }
+            });
+
+            if (letterCount === 0) container.innerHTML = `<p style='text-align:center;'>현재 우체통에 도착한 편지가 없습니다.</p>`;
+        });
+    }
+
+    async function pickLetter(letterId) {
+        const userDoc = await db.collection("users").doc(currentUser.email).get();
+        const currentTickets = userDoc.data().tickets || 0;
+
+        if (currentTickets <= 0) return alert("열람권이 부족합니다! 먼저 '마음 띄워 보내기'를 통해 편지를 발송하세요.");
+        
+        // 안내 확인 [cite: 121]
+        if (!confirm("열람권 1개를 사용하여 편지를 읽으시겠습니까?")) return;
+
+        try {
+            await db.collection("letters").doc(letterId).update({
+                status: "read",
+                read_by: currentUser.email,
+                read_by_nickname: currentUserNickname
+            });
+            await db.collection("users").doc(currentUser.email).update({
+                tickets: firebase.firestore.FieldValue.increment(-1)
+            });
+
+            alert("편지를 열었습니다! 기억 보관함으로 이동합니다.");
+            showInboxScreen(); // 열람 시 보관함 저장 [cite: 122]
+        } catch (e) { alert("오류: " + e.message); }
+    }
+
+    function loadLetters() {
+        const container = document.getElementById('letters-container');
+        container.innerHTML = "<p style='text-align:center;'>보관함을 여는 중...</p>";
+
+        let query = currentTab === 'received' 
+            ? db.collection("letters").where("read_by", "==", currentUser.email)
+            : db.collection("letters").where("from_email", "==", currentUser.email);
+
+        query.onSnapshot((snapshot) => {
+            container.innerHTML = "";
+            if (snapshot.empty) return container.innerHTML = `<p style='text-align:center;'>아직 ${currentTab === 'received' ? '받은' : '보낸'} 편지가 없습니다.</p>`;
+            
+            const letters = [];
+            snapshot.forEach((doc) => letters.push({ id: doc.id, ...doc.data() }));
+            
+            // 최신순 정렬 [cite: 127]
+            letters.sort((a, b) => (b.timestamp?.toMillis() || Date.now()) - (a.timestamp?.toMillis() || Date.now()));
+
+            letters.forEach((data) => {
+                const isSentByMe = (data.from_email === currentUser.email);
+                const partnerEmail = isSentByMe ? data.read_by : data.from_email;
+                const partnerNickname = isSentByMe ? (data.read_by_nickname || "아직 읽지 않음") : data.from_nickname;
+                const onclickEvent = partnerEmail ? `onclick="openChat('${data.id}', '${partnerEmail}', '${partnerNickname}')"` : `onclick="alert('아직 상대방이 우체통에서 꺼내가지 않았습니다.')"`;
+
+                // 리스트에는 닉네임과 제목 노출 [cite: 127]
+                if (currentTab === 'received') {
+                    container.innerHTML += `
+                        <div class="letter-card" ${onclickEvent}>
+                            <div style="font-size:12px; color:var(--retro-red); font-weight:bold;">[${data.category}] From. ${partnerNickname}</div>
+                            <div style="font-size:16px; font-weight:bold; margin: 8px 0; color:var(--wood-brown);">${data.title || '제목 없는 편지'}</div>
+                            <div style="font-size:12px; color:var(--light-wood);">편지 읽기 및 답장하기 💬</div>
+                        </div>`;
+                } else {
+                    const statusText = data.status === 'public' ? '📬 우체통에 대기 중...' : `💬 ${partnerNickname}님과 연결됨`;
+                    container.innerHTML += `
+                        <div class="letter-card sent" ${onclickEvent}>
+                            <div style="font-size:12px; color:var(--light-wood); font-weight:bold;">[${data.category}] To. ${partnerNickname}</div>
+                            <div style="font-size:16px; font-weight:bold; margin: 8px 0; color:var(--wood-brown);">${data.title || '제목 없는 편지'}</div>
+                            <div style="font-size:12px; color:var(--wood-brown); font-weight:bold;">${statusText}</div>
+                        </div>`;
+                }
+            });
+        });
+    }
+
+    // 편지 대화방 (스레드) [cite: 128, 129]
+    function openChat(letterId, partnerEmail, partnerNickname) {
+        currentChatLetterId = letterId;
+        currentChatPartnerEmail = partnerEmail;
+        document.getElementById('inbox-screen').classList.add('hidden');
+        document.getElementById('chat-screen').classList.remove('hidden');
+        document.getElementById('chat-partner-name').innerText = `To. ${partnerNickname}님과의 대화`;
+        loadMessages();
+    }
+
+    function closeChat() {
+        if (chatUnsubscribe) chatUnsubscribe();
+        document.getElementById('chat-screen').classList.add('hidden');
+        document.getElementById('inbox-screen').classList.remove('hidden');
+    }
+
+    function loadMessages() {
+        const container = document.getElementById('chat-messages');
+        chatUnsubscribe = db.collection("letters").doc(currentChatLetterId).collection("messages")
+            .orderBy("timestamp", "asc")
+            .onSnapshot((snapshot) => {
+                container.innerHTML = "";
+                snapshot.forEach((doc) => {
+                    const msg = doc.data();
+                    const isMe = msg.sender_email === currentUser.email;
+                    const paperClass = isMe ? "me" : "other";
+                    const senderLabel = isMe ? "내가 쓴 편지" : "상대방의 편지";
+                    const time = msg.timestamp ? msg.timestamp.toDate().toLocaleString([], {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}) : "방금 전";
+                    
+                    container.innerHTML += `
+                        <div class="letter-paper ${paperClass}">
+                            <div class="letter-header">${senderLabel} <span style="float:right; font-weight:normal;">${time}</span></div>
+                            <div class="letter-body">${msg.content}</div>
+                        </div>
+                    `;
+                });
+                container.scrollTop = container.scrollHeight;
+            });
+    }
+
+    async function sendReply() {
+        let text = document.getElementById('chat-input').value.trim();
+        if (!text) return;
+
+        if (hasBadWords(text)) {
+            if(!confirm("비속어가 포함되어 있습니다. *표시로 치환하여 보내겠습니까?")) return;
+            badWords.forEach(w => text = text.replaceAll(w, "***"));
+        }
+
+        try {
+            await db.collection("letters").doc(currentChatLetterId).collection("messages").add({
+                sender_email: currentUser.email,
+                content: text,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            document.getElementById('chat-input').value = "";
+        } catch (e) { alert("전송 실패: " + e.message); }
+    }
+
+    async function reportUser() {
+        if (!confirm("상대방을 신고하시겠습니까?\n관리자 확인 후 상대방은 정지됩니다.")) return;
+        try {
+            await db.collection("reports").add({
+                reporter: currentUser.email,
+                reported_user: currentChatPartnerEmail, // 내부적으로만 이메일 기록 [cite: 83]
+                letter_id: currentChatLetterId,
+                status: "pending",
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            alert("신고가 접수되었습니다.");
+        } catch (e) { alert("신고 실패"); }
+    }
+
+    // UI 전환 
+    async function showMainScreen() {
+        document.querySelectorAll('.content > div').forEach(div => div.classList.add('hidden'));
+        document.getElementById('main-screen').classList.remove('hidden');
+
+        if (currentUserNickname === "파인만") document.getElementById('btn-admin').classList.remove('hidden');
+
+        document.getElementById('user-nickname').innerText = currentUserNickname + " 님";
+        
+        const userDoc = await db.collection("users").doc(currentUser.email).get();
+        if (userDoc.exists) document.getElementById('ticket-count').innerText = userDoc.data().tickets || 0;
+    }
+
+    function showComposeScreen() {
+        document.querySelectorAll('.content > div').forEach(div => div.classList.add('hidden'));
+        document.getElementById('compose-screen').classList.remove('hidden');
+    }
+
+    function showPublicPoolScreen() {
+        document.querySelectorAll('.content > div').forEach(div => div.classList.add('hidden'));
+        document.getElementById('public-pool-screen').classList.remove('hidden');
+        loadPublicPool(); 
+    }
+
+    function showInboxScreen() {
+        document.querySelectorAll('.content > div').forEach(div => div.classList.add('hidden'));
+        document.getElementById('inbox-screen').classList.remove('hidden');
+        switchTab('received');
+    }
+
+    function switchTab(tabName) {
+        currentTab = tabName;
+        document.getElementById('tab-received').classList.toggle('active', tabName === 'received');
+        document.getElementById('tab-sent').classList.toggle('active', tabName === 'sent');
+        loadLetters();
+    }
+
+    function showAdminScreen() {
+        document.querySelectorAll('.content > div').forEach(div => div.classList.add('hidden'));
+        document.getElementById('admin-screen').classList.remove('hidden');
+        
+        const container = document.getElementById('admin-reports-container');
+        db.collection("reports").where("status", "==", "pending").onSnapshot((snapshot) => {
+            container.innerHTML = "";
+            if (snapshot.empty) return container.innerHTML = "<p>대기 중인 신고가 없습니다.</p>";
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                container.innerHTML += `
+                    <div style="background:white; padding:15px; border-radius:8px; margin-bottom:10px; border:2px solid #d32f2f;">
+                        <p>신고자: ${data.reporter}</p>
+                        <p>피신고자: ${data.reported_user}</p>
+                        <button onclick="processReport('${doc.id}', '${data.reported_user}', true)" style="background:#d32f2f;">수락(정지)</button>
+                        <button onclick="processReport('${doc.id}', '', false)" style="background:#999;">거절</button>
+                    </div>`;
+            });
+        });
+    }
+
+    async function processReport(reportId, reportedUserEmail, isAccepted) {
+        if (!confirm(`이 신고를 ${isAccepted ? '수락' : '거절'} 하시겠습니까?`)) return;
+        try {
+            if (isAccepted) {
+                const suspendTime = Date.now() + (3 * 24 * 60 * 60 * 1000); 
+                await db.collection("users").doc(reportedUserEmail).set({ suspendedUntil: suspendTime }, { merge: true });
+            }
+            await db.collection("reports").doc(reportId).update({ status: isAccepted ? "accepted" : "rejected" });
+            alert("처리되었습니다.");
+        } catch (e) { alert("오류 발생"); }
+    }
+
+    function logout() {
+        auth.signOut().then(() => { currentUser = null; location.reload(); });
+    }
+</script>
+</body>
+</html>
